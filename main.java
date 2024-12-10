@@ -2,7 +2,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.AffineTransform;
-import java.awt.geom.CubicCurve2D;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.awt.geom.GeneralPath;
@@ -32,9 +31,106 @@ public class Main extends JPanel {
 
     private boolean running = true;
 
-    private void drawSmoothRoad(Graphics2D g2d) {
-        g2d.setColor(Color.BLUE);
+    public Double getXForY(double targetY) {
+        if (coordinates.length < 2) {
+            System.out.println("Inadequate coordinate amount");
+            return null;
+        }
 
+        for (int i = 0; i < coordinates.length - 1; i++) {
+            double x0 = i > 0 ? coordinates[i - 1][0] : coordinates[i][0];
+            double y0 = i > 0 ? coordinates[i - 1][1] : coordinates[i][1];
+            double x1 = coordinates[i][0];
+            double y1 = coordinates[i][1];
+            double x2 = coordinates[i + 1][0];
+            double y2 = coordinates[i + 1][1];
+            double x3 = (i < coordinates.length - 2) ? coordinates[i + 2][0] : coordinates[i + 1][0];
+            double y3 = (i < coordinates.length - 2) ? coordinates[i + 2][1] : coordinates[i + 1][1];
+
+            if (!(Math.min(y0, y3) <= targetY && targetY <= Math.max(y0, y3))) {
+                continue;
+            }
+
+          
+            double tLow = 0, tHigh = 1;
+            double epsilon = 1e-5;
+            while (tHigh - tLow > epsilon) {
+                double tMid = (tLow + tHigh) / 2;
+                double yMid = 0.5 * ((-y0 + 3 * y1 - 3 * y2 + y3) * tMid * tMid * tMid +
+                        (2 * y0 - 5 * y1 + 4 * y2 - y3) * tMid * tMid +
+                        (-y0 + y2) * tMid +
+                        2 * y1);
+
+                if (yMid > targetY) {
+                    tHigh = tMid;
+                } else {
+                    tLow = tMid;
+                }
+            }
+
+            double t = (tLow + tHigh) / 2;
+            double yAtT = 0.5 * ((-y0 + 3 * y1 - 3 * y2 + y3) * t * t * t +
+                    (2 * y0 - 5 * y1 + 4 * y2 - y3) * t * t +
+                    (-y0 + y2) * t +
+                    2 * y1);
+
+            if (Math.abs(yAtT - targetY) < epsilon) {
+                double xAtT = 0.5 * ((-x0 + 3 * x1 - 3 * x2 + x3) * t * t * t +
+                        (2 * x0 - 5 * x1 + 4 * x2 - x3) * t * t +
+                        (-x0 + x2) * t +
+                        2 * x1);
+                return xAtT;
+            }
+        }
+
+        System.out.println("No matching segment found for targetY=" + targetY);
+        return null;
+    }
+
+    private void drawSmoothRoad(Graphics2D g2d) {
+        g2d.setColor(Color.GRAY);
+        g2d.setStroke(new BasicStroke(100));
+        // Sort coordinates by y-value
+        Arrays.sort(coordinates, Comparator.comparingDouble(coord -> coord[1]));
+
+        if (coordinates.length < 2)
+            return;
+
+        GeneralPath path = new GeneralPath();
+        path.moveTo(coordinates[0][0], coordinates[0][1]);
+
+        for (int i = 0; i < coordinates.length - 1; i++) {
+            double x0 = i > 0 ? coordinates[i - 1][0] : coordinates[i][0];
+            double y0 = i > 0 ? coordinates[i - 1][1] : coordinates[i][1];
+            double x1 = coordinates[i][0];
+            double y1 = coordinates[i][1];
+            double x2 = coordinates[i + 1][0];
+            double y2 = coordinates[i + 1][1];
+            double x3 = (i < coordinates.length - 2) ? coordinates[i + 2][0] : coordinates[i + 1][0];
+            double y3 = (i < coordinates.length - 2) ? coordinates[i + 2][1] : coordinates[i + 1][1];
+
+            for (double t = 0; t < 1; t += 0.05) {
+                double xt = 0.5 * ((-x0 + 3 * x1 - 3 * x2 + x3) * t * t * t +
+                        (2 * x0 - 5 * x1 + 4 * x2 - x3) * t * t +
+                        (-x0 + x2) * t +
+                        2 * x1);
+                double yt = 0.5 * ((-y0 + 3 * y1 - 3 * y2 + y3) * t * t * t +
+                        (2 * y0 - 5 * y1 + 4 * y2 - y3) * t * t +
+                        (-y0 + y2) * t +
+                        2 * y1);
+
+                path.lineTo(xt, yt);
+            }
+        }
+
+        // Draw the final path
+        g2d.draw(path);
+    }
+
+    // draw the yellow divider like in real roads
+    private void drawDivider(Graphics2D g2d) {
+        g2d.setColor(Color.YELLOW);
+        g2d.setStroke(new BasicStroke(1));
         // Sort coordinates by y-value
         Arrays.sort(coordinates, Comparator.comparingDouble(coord -> coord[1]));
 
@@ -161,6 +257,8 @@ public class Main extends JPanel {
         current_speed += acceleration;
         current_angle += current_speed;
 
+        System.out.println(getXForY(400));
+
         // Road moving
         for (int i = 0; i < coordinates.length; i++) {
             coordinates[i][1] += Math.cos(current_angle * Math.PI / 180.0) * 5;
@@ -173,7 +271,7 @@ public class Main extends JPanel {
 
         // Print coordinates (for debugging)
         for (int i = 0; i < coordinates.length; i++) {
-            System.out.println("X: " + coordinates[i][0] + "  Y: " + coordinates[i][1]);
+            // System.out.println("X: " + coordinates[i][0] + " Y: " + coordinates[i][1]);
         }
     }
 
@@ -187,6 +285,7 @@ public class Main extends JPanel {
 
         // Draw the road with smooth Bézier curves
         drawSmoothRoad(g2d);
+        drawDivider(g2d);
 
         int carSpriteWidth = sprite.getWidth(this);
         int carSpriteHeight = sprite.getHeight(this);
